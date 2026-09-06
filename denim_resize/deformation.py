@@ -186,8 +186,16 @@ def warp_component(
     target_area = int(np.count_nonzero(target_mask))
     metrics: dict[str, object] = {
         "source_bbox_xywh": [x, y, width, height],
+        "source_hip_y_local": source_hip,
         "source_crotch_y_local": source_crotch,
+        "source_knee_y_local": source_knee,
+        "target_hip_y_local": round(source_hip * ratios.hip),
         "target_crotch_y_local": target_crotch,
+        "target_knee_y_local": round(
+            target_crotch + (target_height - 1 - target_crotch)
+            * (source_knee - source_crotch)
+            / max(height - 1 - source_crotch, 1)
+        ),
         "target_shape_hw": [target_height, target_width],
         "source_mask_area_px": source_area,
         "target_mask_area_px": target_area,

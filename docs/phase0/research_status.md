@@ -1,6 +1,6 @@
 # Phase 0 Research Status
 
-更新时间：2026-09-05
+更新时间：2026-09-07
 
 ## 当前项目约束
 
@@ -9,6 +9,7 @@
 - 优先级：原始像素保留 > 局部几何变形 > 新增区域检测 > 真实牛仔 exemplar/patch completion。
 - 当前阶段禁止使用 Stable Diffusion、Flux、整图生成、LLM fine-tuning 或其他大型生成模型替代几何方法。
 - 先完成 geometry 和 structure validation，再研究 texture completion。
+- 当前 v0.3 已写出 same-view 元数据、`target_geometry.json` 和三态评价字段；这些是 P1 几何脚手架，不是物理几何验证。
 
 ## 论文全文队列
 

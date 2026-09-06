@@ -23,6 +23,8 @@ from .completion import (
 )
 from .details import detect_detail_constraints, detail_visualization
 from .edge import EdgeRefinementConfig, refine_garment_edge
+from .evaluation import EvaluationStatus
+from .geometry import build_target_geometry
 from .io import read_bgr, read_binary_mask, sha256_file, write_image
 from .deformation import (
     DeformationRatios,
@@ -145,6 +147,7 @@ def run_reconstruction(
     source_size: str,
     target_size: str,
     size_profile_id: str = "taobao_612962220220",
+    view: str = "unspecified",
     segmentation_config: SegmentationConfig | None = None,
     texture_completion: str = "exemplar",
     completion_config: TextureCompletionConfig | None = None,
@@ -160,6 +163,8 @@ def run_reconstruction(
     matting_config = matting_config or MattingConfig()
     if texture_completion not in {"exemplar", "none"}:
         raise ValueError("texture_completion must be 'exemplar' or 'none'")
+    if view not in {"front", "back", "unspecified"}:
+        raise ValueError("view must be 'front', 'back', or 'unspecified'")
 
     image = read_bgr(source_path)
     segmentation = segment_pants(image, segmentation_config)
@@ -211,6 +216,16 @@ def run_reconstruction(
         alpha_hint=target_alpha,
     )
     reconstructed = edge_refinement.image
+
+    target_geometry = build_target_geometry(
+        target_mask,
+        canonical,
+        warped_components,
+        source_measurements,
+        target_measurements,
+        ratios,
+        view=view,
+    )
 
     unit_ratios = DeformationRatios(waist=1.0, hip=1.0, knee=1.0, length=1.0, front_rise=1.0)
     source_components = [
@@ -399,11 +414,30 @@ def run_reconstruction(
         "edge_refinement": edge_refinement.metrics,
         "identity_preservation": identity_metrics,
         "physical_geometry_evaluated": False,
+        **EvaluationStatus(
+            proxy_checks={
+                "source_matting": bool(matte.metrics["acceptance_passed"]),
+                "texture_completion": bool(
+                    completion.metrics["acceptance_passed"]
+                    if completion is not None
+                    else True
+                ),
+                "edge_refinement": bool(edge_refinement.metrics["acceptance_passed"]),
+                "identity_preservation": bool(
+                    identity_metrics.get("acceptance_passed", True)
+                ),
+            },
+            geometry_evaluated=False,
+            physical_geometry_status="not_evaluated",
+            reason="no DXF, paired target image, or verified physical geometry ground truth",
+        ).to_dict(),
         "evaluation_scope": "image-quality proxies; no DXF or target-size ground truth",
     }
     config_payload: dict[str, object] = {
         "source_size": source_size,
         "target_size": target_size,
+        "view": view,
+        "same_view_reconstruction": True,
         "size_profile": {
             "id": profile.profile_id,
             "merchant": profile.merchant,
@@ -429,6 +463,8 @@ def run_reconstruction(
         "source_image": str(source_path),
         "source_sha256": sha256_file(source_path),
         "source_shape_hwc": list(image.shape),
+        "view": view,
+        "output_view": view,
         "git_revision": _git_revision(),
         "versions": {
             "python": platform.python_version(),
@@ -439,6 +475,7 @@ def run_reconstruction(
     }
     _write_json(output_path / "config.json", config_payload)
     _write_json(output_path / "metrics.json", metrics)
+    _write_json(output_path / "target_geometry.json", target_geometry.to_dict())
     _write_json(output_path / "manifest.json", manifest)
     return RunResult(output_directory=output_path, metrics=metrics)
 
@@ -449,6 +486,7 @@ def run_size_series(
     source_size: str,
     target_sizes: list[str],
     size_profile_id: str = "taobao_612962220220",
+    view: str = "unspecified",
     segmentation_config: SegmentationConfig | None = None,
     texture_completion: str = "exemplar",
     completion_config: TextureCompletionConfig | None = None,
@@ -476,6 +514,7 @@ def run_size_series(
             source_size=source_size,
             target_size=target_size,
             size_profile_id=size_profile_id,
+            view=view,
             segmentation_config=segmentation_config,
             texture_completion=texture_completion,
             completion_config=completion_config,
@@ -507,12 +546,18 @@ def run_size_series(
         "all_sizes_accepted": all(acceptance.values()),
         "all_proxy_checks_passed": all(acceptance.values()),
         "physical_geometry_evaluated": False,
+        "proxy_checks_passed": all(acceptance.values()),
+        "geometry_evaluated": False,
+        "physical_geometry_status": "not_evaluated",
+        "evaluation_scope": "image-quality proxies; no DXF or target-size ground truth",
         "runs": size_results,
     }
     config: dict[str, object] = {
         "source_size": source_size,
         "target_sizes": ordered_sizes,
         "size_profile_id": size_profile_id,
+        "view": view,
+        "same_view_reconstruction": True,
         "texture_completion": texture_completion,
         "matting": matting_config.to_dict(),
     }

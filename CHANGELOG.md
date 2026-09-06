@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.3.0-p1-geometry-contract - 2026-09-07
+
+This release adds the P1 geometry contract without claiming that the current
+row-wise deformation is a physical grading solution.
+
+### Added
+
+- Explicit `TargetGeometry` output with heuristic landmarks, structure curves,
+  silhouette summary, semantic regions, measurement constraints, and confidence
+  provenance.
+- `target_geometry.json` for each reconstruction run.
+- Same-view metadata and a CLI `--view` option for front/back/unspecified input.
+- Separate `proxy_checks_passed`, `geometry_evaluated`, and
+  `physical_geometry_status` fields.
+- Target hip, crotch, knee, and hem anchors in deformation diagnostics.
+
+### Scope
+
+- The target geometry is a machine-readable scaffold around the current
+  row-wise remap baseline.
+- Physical geometry remains `not_evaluated` without DXF, paired target imagery,
+  or verified measurements.
+
 ## v0.2.0-p0-boundary-alpha - 2026-09-07
 
 This research release strengthens Phase 0 boundary handling and source-equals-

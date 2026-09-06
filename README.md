@@ -1,6 +1,6 @@
 # Denim Cross-Size Reconstruction Research
 
-Current release: `v0.2.0-p0-boundary-alpha` (research prototype)
+Current release: `v0.3.0-p1-geometry-contract` (research prototype)
 
 The repository now includes a first end-to-end, non-generative cross-size
 baseline. It accepts a jeans product image plus source/target size, segments the
@@ -17,6 +17,12 @@ See `CHANGELOG.md` for the v0.2 change list and verification status. This
 release improves the P0 boundary/identity path; the target geometry is still a
 row-wise proportional baseline and is not yet a validated industrial grading
 system.
+
+The current run contract also records the observed view, keeps output in the
+same view, writes `target_geometry.json`, and separates proxy acceptance from
+physical geometry status. `physical_geometry_status` remains
+`not_evaluated` until DXF, paired target images, or verified measurements are
+provided.
 
 ## Learning guides
 

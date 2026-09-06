@@ -29,6 +29,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Item-specific merchant measurement profile",
     )
     parser.add_argument(
+        "--view",
+        choices=("front", "back", "unspecified"),
+        default="unspecified",
+        help="Observed garment view; output remains the same view",
+    )
+    parser.add_argument(
         "--ground-truth", type=Path, help="Optional binary mask for evaluation"
     )
     parser.add_argument(
@@ -79,6 +85,7 @@ def main() -> int:
                 source_size=args.source_size,
                 target_sizes=target_sizes,
                 size_profile_id=args.size_profile,
+                view=args.view,
                 segmentation_config=config,
                 texture_completion=args.texture_completion,
             )
@@ -89,6 +96,7 @@ def main() -> int:
                 source_size=args.source_size,
                 target_size=args.target_size,
                 size_profile_id=args.size_profile,
+                view=args.view,
                 segmentation_config=config,
                 texture_completion=args.texture_completion,
             )

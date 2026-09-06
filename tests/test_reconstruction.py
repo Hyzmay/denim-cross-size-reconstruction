@@ -67,6 +67,7 @@ class ReconstructionTests(unittest.TestCase):
                 output_path,
                 source_size="32",
                 target_size="38",
+                view="front",
                 segmentation_config=SegmentationConfig(
                     use_grabcut=False, max_major_components=1
                 ),
@@ -95,6 +96,7 @@ class ReconstructionTests(unittest.TestCase):
                 "local_scale_map.png",
                 "texture_completion_regions.png",
                 "texture_completion_comparison.png",
+                "target_geometry.json",
                 "config.json",
                 "metrics.json",
                 "manifest.json",
@@ -112,6 +114,15 @@ class ReconstructionTests(unittest.TestCase):
             )
             self.assertIn("source_matting", result.metrics)
             self.assertFalse(result.metrics["physical_geometry_evaluated"])
+            self.assertTrue(result.metrics["proxy_checks_passed"])
+            self.assertFalse(result.metrics["geometry_evaluated"])
+            self.assertEqual(result.metrics["physical_geometry_status"], "not_evaluated")
+            target_geometry = json.loads(
+                (output_path / "target_geometry.json").read_text("utf-8")
+            )
+            self.assertEqual(target_geometry["source_view"], "front")
+            self.assertEqual(target_geometry["output_view"], "front")
+            self.assertFalse(target_geometry["mesh"]["available"])
 
     def test_identity_size_preserves_mask_boundary_alpha_and_interior_pixels(self) -> None:
         image, _ = _synthetic_pants()
@@ -157,6 +168,8 @@ class ReconstructionTests(unittest.TestCase):
                     (output_path / f"size_{size}" / "reconstructed.png").is_file()
                 )
             self.assertEqual(result.metrics["target_sizes"], ["32", "34", "38"])
+            self.assertTrue(result.metrics["proxy_checks_passed"])
+            self.assertEqual(result.metrics["physical_geometry_status"], "not_evaluated")
 
 
 if __name__ == "__main__":

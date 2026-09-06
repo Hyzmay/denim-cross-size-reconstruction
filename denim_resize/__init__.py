@@ -3,6 +3,8 @@
 from .canonical import CanonicalGarment, build_canonical_garment
 from .completion import TextureCompletionConfig, complete_texture_exemplar
 from .edge import EdgeRefinementConfig, refine_garment_edge
+from .evaluation import EvaluationStatus
+from .geometry import TargetGeometry, build_target_geometry
 from .segmentation import (
     SegmentationConfig,
     SegmentationError,
@@ -18,6 +20,9 @@ __all__ = [
     "build_canonical_garment",
     "EdgeRefinementConfig",
     "refine_garment_edge",
+    "EvaluationStatus",
+    "TargetGeometry",
+    "build_target_geometry",
     "SegmentationConfig",
     "SegmentationError",
     "SegmentationResult",
