@@ -4,5 +4,6 @@ __pycache__/
 tmp/
 runs/
 data/raw/
+data/photo/
+artifacts/denim-resize-research-v2/previous-installed-skill/
 .idea/
-

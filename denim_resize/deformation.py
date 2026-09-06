@@ -37,6 +37,7 @@ class DeformationRatios:
 @dataclass(slots=True)
 class WarpedComponent:
     image: np.ndarray
+    alpha: np.ndarray
     mask: np.ndarray
     new_region: np.ndarray
     displacement: np.ndarray
@@ -77,11 +78,20 @@ def warp_component(
     mask: np.ndarray,
     structure: PantsStructure,
     ratios: DeformationRatios,
+    source_alpha: np.ndarray | None = None,
     background_bgr: tuple[int, int, int] = (255, 255, 255),
 ) -> WarpedComponent:
     x, y, width, height = structure.x, structure.y, structure.width, structure.height
     source_image = image_bgr[y : y + height, x : x + width]
     source_mask = mask[y : y + height, x : x + width]
+    if source_alpha is None:
+        source_alpha_crop = source_mask.astype(np.float32)
+    else:
+        if source_alpha.shape != mask.shape:
+            raise ValueError("source_alpha and mask shapes must match")
+        source_alpha_crop = source_alpha[y : y + height, x : x + width].astype(
+            np.float32
+        )
     source_crotch = structure.crotch_y - y
     source_hip = structure.hip_y - y
     source_knee = structure.knee_y - y
@@ -149,6 +159,16 @@ def warp_component(
         borderMode=cv2.BORDER_CONSTANT,
         borderValue=background_bgr,
     )
+    warped_alpha = cv2.remap(
+        source_alpha_crop,
+        map_x,
+        map_y,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=0.0,
+    )
+    warped_alpha[~target_mask] = 0.0
+    warped_alpha = np.clip(warped_alpha, 0.0, 1.0)
     output = np.full_like(warped, background_bgr)
     output[target_mask] = warped[target_mask]
     new_region = target_mask & ~preserved_mask
@@ -179,6 +199,7 @@ def warp_component(
     }
     return WarpedComponent(
         image=output,
+        alpha=warped_alpha,
         mask=target_mask,
         new_region=new_region,
         displacement=displacement,
@@ -214,6 +235,25 @@ def compose_components(
         local_scale[region] = component.local_scale
         cursor += w + gap
     return image, mask, new_region, displacement, local_scale
+
+
+def compose_component_alpha(
+    components: list[WarpedComponent], gap: int = 24, margin: int = 16
+) -> np.ndarray:
+    if not components:
+        raise ValueError("At least one component is required")
+    height = max(component.image.shape[0] for component in components) + 2 * margin
+    width = sum(component.image.shape[1] for component in components)
+    width += gap * (len(components) - 1) + 2 * margin
+    alpha = np.zeros((height, width), dtype=np.float32)
+    cursor = margin
+    for component in components:
+        h, w = component.image.shape[:2]
+        top = margin + (height - 2 * margin - h) // 2
+        region = np.s_[top : top + h, cursor : cursor + w]
+        alpha[region] = np.maximum(alpha[region], component.alpha)
+        cursor += w + gap
+    return alpha
 
 
 def displacement_visualization(displacement: np.ndarray, mask: np.ndarray) -> np.ndarray:

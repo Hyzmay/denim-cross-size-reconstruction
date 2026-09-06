@@ -60,6 +60,7 @@ def refine_garment_edge(
     mask: np.ndarray,
     config: EdgeRefinementConfig | None = None,
     background_bgr: tuple[int, int, int] = (255, 255, 255),
+    alpha_hint: np.ndarray | None = None,
 ) -> EdgeRefinementResult:
     config = config or EdgeRefinementConfig()
     if image_bgr.shape[:2] != mask.shape:
@@ -68,6 +69,11 @@ def refine_garment_edge(
         raise ValueError("mask must be a boolean array")
     if not np.any(mask):
         raise ValueError("Cannot refine an empty garment mask")
+    if alpha_hint is not None:
+        if alpha_hint.shape != mask.shape:
+            raise ValueError("alpha_hint and mask shapes must match")
+        if not np.issubdtype(alpha_hint.dtype, np.floating):
+            raise ValueError("alpha_hint must use a floating-point dtype")
 
     binary = mask.astype(np.uint8)
     if config.morphology_radius:
@@ -92,13 +98,18 @@ def refine_garment_edge(
         area_change_fraction = 0.0
 
     extended = extend_foreground_color(image_bgr, mask).astype(np.float32)
-    alpha = cv2.GaussianBlur(
+    shape_alpha = cv2.GaussianBlur(
         refined_mask.astype(np.float32),
         (0, 0),
         sigmaX=config.feather_sigma,
         sigmaY=config.feather_sigma,
     )
-    alpha = np.clip(alpha, 0.0, 1.0)
+    shape_alpha = np.clip(shape_alpha, 0.0, 1.0)
+    if alpha_hint is None:
+        alpha = shape_alpha
+    else:
+        hint = np.clip(alpha_hint.astype(np.float32), 0.0, 1.0)
+        alpha = np.minimum(shape_alpha, hint)
     background = np.asarray(background_bgr, dtype=np.float32)
     output = extended * alpha[..., None] + background * (1.0 - alpha[..., None])
     output = np.clip(output, 0, 255).astype(np.uint8)
@@ -115,6 +126,8 @@ def refine_garment_edge(
         "roughness_after": roughness_after,
         "roughness_improvement": roughness_before - roughness_after,
         "antialias_transition_pixels": transitional_pixels,
+        "alpha_hint_used": alpha_hint is not None,
+        "quality_scope": "silhouette proxy without boundary ground truth",
         "acceptance_passed": (
             area_change_fraction <= config.maximum_area_change_fraction
             and roughness_after <= roughness_before + 1e-6

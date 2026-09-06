@@ -1,9 +1,32 @@
 # Denim Cross-Size Reconstruction Research
 
+Current release: `v0.2.0-p0-boundary-alpha` (research prototype)
+
 The repository now includes a first end-to-end, non-generative cross-size
 baseline. It accepts a jeans product image plus source/target size, segments the
 garment, infers structural levels, applies a region-aware row deformation, and
 exports the reconstructed image and geometry diagnostics.
+
+The reconstruction now estimates a source foreground alpha matte before
+deformation, warps foreground color and alpha together, and records an identity
+gate when source and target sizes match. The reported acceptance fields remain
+image-quality proxies; they do not represent physical size validation without
+DXF or same-item target-size ground truth.
+
+See `CHANGELOG.md` for the v0.2 change list and verification status. This
+release improves the P0 boundary/identity path; the target geometry is still a
+row-wise proportional baseline and is not yet a validated industrial grading
+system.
+
+## Learning guides
+
+- `docs/learning/01_项目完整理解_教师提问版.md`: current system, module data flow,
+  artifacts, metrics, limitations, and oral-review questions in teaching order.
+- `docs/learning/02_四篇论文与项目迁移_教师提问版.md`: GP-VTON, GaPT-DAR,
+  ViTon-GUN, and DualFit, with original tasks separated from transferable ideas
+  and the code's actual implementation status.
+- `docs/learning/03_合并版Skill与项目执行框架.md`: merged v2 research skill,
+  corrected phase gates, input contract, evaluation states, and paper transfer.
 
 ## Cross-size reconstruction
 

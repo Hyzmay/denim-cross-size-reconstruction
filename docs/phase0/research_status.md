@@ -14,10 +14,10 @@
 
 | Paper | 正式身份 | 全文状态 | 代码/项目入口 | 当前阅读状态 |
 |---|---|---|---|---|
-| GP-VTON | CVPR 2023, arXiv:2303.13756, DOI: 10.1109/CVPR52729.2023.02255 | 主论文已保存并完成文本抽取与 10 页渲染 | https://github.com/xiezhy6/GP-VTON | 主论文已完整初读；Supplementary/代码细节待核验 |
-| GaPT-DAR | CVPR 2025, pp. 22638-22647 | CVF accepted version 已保存并完成文本抽取与 10 页渲染 | https://github.com/zanly20/GaPT-DAR ; https://sites.google.com/view/gapt-dar | 待逐节完整阅读 |
-| ViTon-GUN | IEEE TVCG 31(10), pp. 7740-7751, DOI: 10.1109/TVCG.2025.3550776 | 已通过澳门理工大学图书馆授权代理获取 IEEE 正式全文，并完成文本抽取与 12 页渲染 | IEEE document 10944549 | 待逐节完整阅读 |
-| DualFit | Retail Vision, ICCV 2025, arXiv:2508.12131 | arXiv v1 已保存并完成文本抽取与 11 页渲染 | arXiv 页面未列出代码链接 | 待逐节完整阅读 |
+| GP-VTON | CVPR 2023, arXiv:2303.13756, DOI: 10.1109/CVPR52729.2023.02255 | 主论文已保存并完成文本抽取与 10 页渲染 | https://github.com/xiezhy6/GP-VTON | 2026-09-06 已逐节核对主论文；Supplementary/官方代码仍待核验 |
+| GaPT-DAR | CVPR 2025, pp. 22638-22647 | CVF accepted version 已保存并完成文本抽取与 10 页渲染 | https://github.com/zanly20/GaPT-DAR ; https://sites.google.com/view/gapt-dar | 2026-09-06 已逐节核对主论文；官方代码仍待核验 |
+| ViTon-GUN | IEEE TVCG 31(10), pp. 7740-7751, DOI: 10.1109/TVCG.2025.3550776 | 已通过澳门理工大学图书馆授权代理获取 IEEE 正式全文，并完成文本抽取与 12 页渲染 | IEEE document 10944549 | 2026-09-06 已逐节核对主论文；Supplementary/官方代码仍待核验 |
+| DualFit | arXiv:2508.12131 | arXiv v1 已保存并完成文本抽取与 11 页渲染 | https://uark-aicv.github.io/DualFit | 2026-09-06 已逐节核对主论文；官方代码仍待核验 |
 
 本地论文目录：`references/papers/`
 
@@ -75,4 +75,4 @@
 
 - 已收到并运行首张真实牛仔裤正背双视图商品图；多视图主体保持通过，但尚无人工 ground-truth mask，不能量化真实 IoU、Dice 或 boundary F1。
 - 右下角水印与背面裤脚相连，当前 classical baseline 存在局部边界污染；结构阶段应先使用较干净的正面视图，或先比较预训练 garment parsing baseline。
-- 四篇重点论文的主论文全文均已合法获取；Supplementary 与官方代码仍需逐篇核验。
+- 四篇重点论文的主论文全文均已合法获取并完成逐节核对；本轮教学总结见 `docs/learning/02_四篇论文与项目迁移_教师提问版.md`。Supplementary 与官方代码仍需逐篇核验。

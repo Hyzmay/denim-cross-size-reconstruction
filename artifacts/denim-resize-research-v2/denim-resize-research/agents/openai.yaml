@@ -1,0 +1,4 @@
+interface:
+  display_name: "Denim Cross-Size Research"
+  short_description: "Build evidence-driven, non-generative denim resizing pipelines"
+  default_prompt: "Use $denim-resize-research to design the next validated experiment for single-image denim cross-size reconstruction."

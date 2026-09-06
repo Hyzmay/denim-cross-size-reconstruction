@@ -78,6 +78,8 @@ class ReconstructionTests(unittest.TestCase):
                 "reconstructed_baseline.png",
                 "reconstructed_texture_completed.png",
                 "comparison.png",
+                "source_alpha.png",
+                "source_foreground_matte.png",
                 "target_mask.png",
                 "refined_target_mask.png",
                 "edge_alpha.png",
@@ -108,6 +110,30 @@ class ReconstructionTests(unittest.TestCase):
             self.assertEqual(
                 result.metrics["canonical_representation"]["coverage"], 1.0
             )
+            self.assertIn("source_matting", result.metrics)
+            self.assertFalse(result.metrics["physical_geometry_evaluated"])
+
+    def test_identity_size_preserves_mask_boundary_alpha_and_interior_pixels(self) -> None:
+        image, _ = _synthetic_pants()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source_path = root / "source.png"
+            write_image(source_path, image)
+            result = run_reconstruction(
+                source_path,
+                root / "identity",
+                source_size="34",
+                target_size="34",
+                segmentation_config=SegmentationConfig(
+                    use_grabcut=False, max_major_components=1
+                ),
+            )
+            identity = result.metrics["identity_preservation"]
+            self.assertTrue(identity["applicable"])
+            self.assertTrue(identity["acceptance_passed"])
+            self.assertGreaterEqual(identity["mask_iou"], 0.999)
+            self.assertGreaterEqual(identity["boundary_f1_tolerance_1px"], 0.999)
+            self.assertLessEqual(identity["interior_pixel_mae"], 0.5)
 
     def test_size_series_writes_all_targets_at_a_common_scale(self) -> None:
         image, _ = _synthetic_pants()

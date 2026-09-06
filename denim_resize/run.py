@@ -26,11 +26,13 @@ from .edge import EdgeRefinementConfig, refine_garment_edge
 from .io import read_bgr, read_binary_mask, sha256_file, write_image
 from .deformation import (
     DeformationRatios,
+    compose_component_alpha,
     compose_components,
     displacement_visualization,
     scale_visualization,
     warp_component,
 )
+from .matting import MattingConfig, estimate_foreground_matte
 from .metrics import boundary_f1, mask_diagnostics, mask_dice, mask_iou
 from .segmentation import SegmentationConfig, segment_pants
 from .sizes import get_size_profile
@@ -147,6 +149,7 @@ def run_reconstruction(
     texture_completion: str = "exemplar",
     completion_config: TextureCompletionConfig | None = None,
     edge_config: EdgeRefinementConfig | None = None,
+    matting_config: MattingConfig | None = None,
 ) -> RunResult:
     source_path = Path(image_path).resolve()
     output_path = Path(output_directory).resolve()
@@ -154,11 +157,13 @@ def run_reconstruction(
     segmentation_config = segmentation_config or SegmentationConfig()
     completion_config = completion_config or TextureCompletionConfig()
     edge_config = edge_config or EdgeRefinementConfig()
+    matting_config = matting_config or MattingConfig()
     if texture_completion not in {"exemplar", "none"}:
         raise ValueError("texture_completion must be 'exemplar' or 'none'")
 
     image = read_bgr(source_path)
     segmentation = segment_pants(image, segmentation_config)
+    matte = estimate_foreground_matte(image, segmentation.mask, matting_config)
     structures = infer_pants_structures(segmentation.mask)
     if not structures:
         raise ValueError("No pants structures were inferred from the segmentation mask")
@@ -173,12 +178,19 @@ def run_reconstruction(
         raise ValueError("All deformation ratios must be positive")
 
     warped_components = [
-        warp_component(image, segmentation.mask, structure, ratios)
+        warp_component(
+            matte.foreground_bgr,
+            segmentation.mask,
+            structure,
+            ratios,
+            source_alpha=matte.alpha,
+        )
         for structure in structures
     ]
     reconstructed_baseline, target_mask, new_region, displacement, local_scale = (
         compose_components(warped_components)
     )
+    target_alpha = compose_component_alpha(warped_components)
     details = detect_detail_constraints(reconstructed_baseline, target_mask)
     if texture_completion == "exemplar":
         completion = complete_texture_exemplar(
@@ -193,21 +205,79 @@ def run_reconstruction(
         completion = None
         texture_completed = reconstructed_baseline
     edge_refinement = refine_garment_edge(
-        texture_completed, target_mask, config=edge_config
+        texture_completed,
+        target_mask,
+        config=edge_config,
+        alpha_hint=target_alpha,
     )
     reconstructed = edge_refinement.image
 
     unit_ratios = DeformationRatios(waist=1.0, hip=1.0, knee=1.0, length=1.0, front_rise=1.0)
     source_components = [
-        warp_component(image, segmentation.mask, structure, unit_ratios)
+        warp_component(
+            matte.foreground_bgr,
+            segmentation.mask,
+            structure,
+            unit_ratios,
+            source_alpha=matte.alpha,
+        )
         for structure in structures
     ]
     source_foreground_hard, source_composed_mask, _, _, _ = compose_components(
         source_components
     )
-    source_foreground = refine_garment_edge(
-        source_foreground_hard, source_composed_mask, config=edge_config
-    ).image
+    source_alpha = compose_component_alpha(source_components)
+    source_edge_refinement = refine_garment_edge(
+        source_foreground_hard,
+        source_composed_mask,
+        config=edge_config,
+        alpha_hint=source_alpha,
+    )
+    source_foreground = source_edge_refinement.image
+
+    if source_size == target_size:
+        common_interior = cv2.erode(
+            target_mask.astype(np.uint8), np.ones((5, 5), dtype=np.uint8)
+        ).astype(bool)
+        interior_mae = (
+            float(
+                np.mean(
+                    np.abs(
+                        reconstructed[common_interior].astype(np.float32)
+                        - source_foreground[common_interior].astype(np.float32)
+                    )
+                )
+            )
+            if np.any(common_interior)
+            else 0.0
+        )
+        identity_iou = mask_iou(edge_refinement.mask, source_composed_mask)
+        identity_boundary_f1 = boundary_f1(
+            edge_refinement.mask, source_composed_mask, 1.0
+        )
+        identity_alpha_mae = float(
+            np.mean(
+                np.abs(edge_refinement.alpha - source_edge_refinement.alpha)
+            )
+        )
+        identity_metrics: dict[str, object] = {
+            "applicable": True,
+            "mask_iou": identity_iou,
+            "boundary_f1_tolerance_1px": identity_boundary_f1,
+            "interior_pixel_mae": interior_mae,
+            "alpha_mae": identity_alpha_mae,
+            "acceptance_passed": (
+                identity_iou >= 0.999
+                and identity_boundary_f1 >= 0.999
+                and interior_mae <= 0.5
+                and identity_alpha_mae <= 0.01
+            ),
+        }
+    else:
+        identity_metrics = {
+            "applicable": False,
+            "reason": "source and target sizes differ",
+        }
     structure_view = draw_structures(make_overlay(image, segmentation.mask), structures)
     comparison = make_comparison(
         source_foreground,
@@ -224,6 +294,18 @@ def run_reconstruction(
         )
 
     write_image(output_path / "source_mask.png", segmentation.mask.astype(np.uint8) * 255)
+    write_image(
+        output_path / "source_alpha.png",
+        np.clip(matte.alpha * 255.0, 0, 255).astype(np.uint8),
+    )
+    source_matte_preview = (
+        matte.foreground_bgr.astype(np.float32) * matte.alpha[..., None]
+        + 255.0 * (1.0 - matte.alpha[..., None])
+    )
+    write_image(
+        output_path / "source_foreground_matte.png",
+        np.clip(source_matte_preview, 0, 255).astype(np.uint8),
+    )
     write_image(output_path / "structure_landmarks.png", structure_view)
     write_image(
         output_path / "canonical_uv.png", canonical_uv_visualization(canonical)
@@ -312,8 +394,12 @@ def run_reconstruction(
             else {"method": "stretched_source_baseline"}
         ),
         "detail_constraints": details.metrics,
+        "source_matting": matte.metrics,
         "canonical_representation": canonical.metrics,
         "edge_refinement": edge_refinement.metrics,
+        "identity_preservation": identity_metrics,
+        "physical_geometry_evaluated": False,
+        "evaluation_scope": "image-quality proxies; no DXF or target-size ground truth",
     }
     config_payload: dict[str, object] = {
         "source_size": source_size,
@@ -335,6 +421,7 @@ def run_reconstruction(
             "config": completion_config.to_dict(),
         },
         "edge_refinement": edge_config.to_dict(),
+        "matting": matting_config.to_dict(),
         "structure": [structure.to_dict() for structure in structures],
     }
     manifest: dict[str, object] = {
@@ -366,9 +453,11 @@ def run_size_series(
     texture_completion: str = "exemplar",
     completion_config: TextureCompletionConfig | None = None,
     edge_config: EdgeRefinementConfig | None = None,
+    matting_config: MattingConfig | None = None,
 ) -> RunResult:
     if not target_sizes:
         raise ValueError("At least one target size is required")
+    matting_config = matting_config or MattingConfig()
     ordered_sizes = list(dict.fromkeys(target_sizes))
     profile = get_size_profile(size_profile_id)
     profile.pair(source_size, source_size)
@@ -391,6 +480,7 @@ def run_size_series(
             texture_completion=texture_completion,
             completion_config=completion_config,
             edge_config=edge_config,
+            matting_config=matting_config,
         )
         size_results[target_size] = result.metrics
         series_images.append(read_bgr(result.output_directory / "reconstructed.png"))
@@ -403,8 +493,10 @@ def run_size_series(
     )
     acceptance = {
         size: bool(
-            metrics["texture_completion"].get("acceptance_passed", True)
+            metrics["source_matting"]["acceptance_passed"]
+            and metrics["texture_completion"].get("acceptance_passed", True)
             and metrics["edge_refinement"]["acceptance_passed"]
+            and metrics["identity_preservation"].get("acceptance_passed", True)
         )
         for size, metrics in size_results.items()
     }
@@ -413,6 +505,8 @@ def run_size_series(
         "target_sizes": ordered_sizes,
         "per_size_acceptance": acceptance,
         "all_sizes_accepted": all(acceptance.values()),
+        "all_proxy_checks_passed": all(acceptance.values()),
+        "physical_geometry_evaluated": False,
         "runs": size_results,
     }
     config: dict[str, object] = {
@@ -420,6 +514,7 @@ def run_size_series(
         "target_sizes": ordered_sizes,
         "size_profile_id": size_profile_id,
         "texture_completion": texture_completion,
+        "matting": matting_config.to_dict(),
     }
     source_path = Path(image_path).resolve()
     manifest: dict[str, object] = {
